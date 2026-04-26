@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulatore Studio di Funzione - Step by Step</title>
+    <!-- Includiamo math.js per il parsing matematico e le derivate -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+    <!-- Includiamo KaTeX per il rendering delle formule in LaTeX -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent: #bb86fc;
+            --secondary: #03dac6;
+            --danger: #cf6679;
+            --grid-color: #333333;
+            --axis-color: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Layout a due colonne */
+        #left-panel {
+            width: 40%;
+            padding: 20px;
+            box-sizing: border-box;
+            background-color: var(--panel-bg);
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        #top-controls {
+            flex-shrink: 0;
+        }
+
+        #steps-log {
+            flex-grow: 1;
+            overflow-y: auto;
+            margin-top: 10px;
+            padding-right: 5px;
+        }
+
+        /* Custom scrollbar per il log degli step */
+        #steps-log::-webkit-scrollbar {
+            width: 8px;
+        }
+        #steps-log::-webkit-scrollbar-track {
+            background: var(--panel-bg);
+        }
+        #steps-log::-webkit-scrollbar-thumb {
+            background-color: #555;
+            border-radius: 4px;
+        }
+        #steps-log::-webkit-scrollbar-thumb:hover {
+            background-color: #777;
+        }
+
+        #right-panel {
+            width: 60%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--bg-color);
+            position: relative;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            color: var(--accent);
+            margin-top: 0;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            background-color: #2c2c2c;
+            border: 1px solid #444;
+            color: white;
+            font-size: 1.1rem;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 10px 15px;
+            background-color: var(--accent);
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #9d68d1;
+        }
+
+        button:disabled {
+            background-color: #555;
+            color: #888;
+            cursor: not-allowed;
+        }
+
+        #btn-next {
+            background-color: #4a6fa5; /* Colore meno flashante (blu avio) */
+            color: white;
+            margin-top: 10px;
+            width: 100%;
+            font-size: 1.1rem;
+            padding: 15px;
+        }
+        #btn-next:hover {
+            background-color: #3b5988;
+        }
+        #btn-next:disabled {
+            background-color: #333;
+            color: #888;
+            cursor: not-allowed;
+        }
+
+        .step-container {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #2a2a2a;
+            border-left: 4px solid var(--accent);
+            border-radius: 0 4px 4px 0;
+            display: none; /* Nascosto all'inizio */
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        .step-container.active {
+            display: block;
+        }
+
+        .step-title {
+            font-weight: bold;
+            color: var(--secondary);
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+        }
+
+        .math-text {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.1rem;
+            margin: 5px 0;
+        }
+
+        /* Stile Tabella dei Segni (leggibile in orizzontale) */
+        .sign-table {
+            margin-top: 15px;
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .sign-grid {
+            display: grid;
+            text-align: center;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.2rem;
+            position: relative;
+            padding-bottom: 10px;
+        }
+
+        .sg-row { display: contents; }
+        
+        .sg-cell {
+            padding: 10px 5px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* La linea dell'asse X */
+        .sg-axis-row .sg-cell {
+            border-bottom: 2px solid white;
+            font-weight: bold;
+            padding-bottom: 15px;
+        }
+
+        /* Linee verticali tratteggiate in corrispondenza dei valori critici */
+        .sg-val-col {
+            border-right: 1px dashed #666;
+        }
+        .sg-val-col:last-child {
+            border-right: none;
+        }
+
+        /* Il cerchietto per il segno finale */
+        .final-sign {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            line-height: 28px;
+            border: 2px solid white;
+            border-radius: 50%;
+            font-weight: bold;
+        }
+
+        canvas {
+            border: 1px solid #444;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            background-color: var(--bg-color);
+            border-radius: 8px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        #legend {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(30, 30, 30, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #444;
+            font-size: 0.9rem;
+        }
+        .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+        .legend-color { width: 15px; height: 15px; margin-right: 10px; border-radius: 50%; }
+
+        code {
+            background-color: #333;
+            padding: 2px 4px;
+            border-radius: 3px;
+            color: #ffb86c;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="left-panel">
+        <div id="top-controls">
+            <h1>Studio di Funzione</h1>
+            
+            <div style="font-size: 0.85rem; color: #aaa; margin-bottom: 15px; background: #2a2a2a; padding: 10px; border-radius: 4px; border-left: 3px solid var(--accent);">
+                <strong>Esempi di sintassi:</strong>
+                <ul style="margin: 5px 0 0 20px; padding: 0; line-height: 1.4;">
+                    <li><em>Fratte/Polinomi:</em> <code>(x^2-4)/(x-1)</code>, <code>x^3-3x</code></li>
+                    <li><em>Trigonometriche:</em> <code>sin(x)</code>, <code>cos(x)</code>, <code>tan(x)</code></li>
+                    <li><em>Esponenziali:</em> <code>e^x</code>, <code>exp(x)</code></li>
+                    <li><em>Logaritmiche:</em> <code>log(x)</code> (naturale), <code>log(x^2-4)/(x-1)</code></li>
+                    <li><em>Radici:</em> <code>sqrt(x)</code></li>
+                </ul>
+            </div>
+            
+            <div class="input-group">
+                <span style="font-size:1.2rem; align-self:center;">f(x) =</span>
+                <input type="text" id="func-input" value="(x^2-4)/(x-1)">
+                <button onclick="startAnalysis()">Analizza</button>
+            </div>
+
+            <button id="btn-next" onclick="nextStep()" disabled>Inizia Studio (Step 1)</button>
+        </div>
+
+        <div id="steps-log">
+            <!-- I vari step compariranno qui -->
+        </div>
+    </div>
+
+    <div id="right-panel">
+        <canvas id="mathCanvas" width="800" height="800"></canvas>
+        <div id="legend">
+            <div class="legend-item"><div class="legend-color" style="border: 2px solid white; background: transparent;"></div> Punto isolato escluso</div>
+            <div class="legend-item"><div class="legend-color" style="background: white;"></div> Zeri (Intersezioni)</div>
+            <div class="legend-item"><div class="legend-color" style="background: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(207, 102, 121, 0.5) 5px, rgba(207, 102, 121, 0.5) 7px);"></div> Zona non attraversata / non definita</div>
+            <div class="legend-item"><div class="legend-color" style="background: #03dac6;"></div> Asintoti</div>
+        </div>
+    </div>
+
+    <script>
+        // --- VARIABILI GLOBALI ---
+        let currentStep = 0;
+        const totalSteps = 8;
+        
+        let funcStr = "";
+        let f, f1, f2; // Funzioni compilate (f, f', f'')
+        let fTex, f1Tex, f2Tex; // Stringhe delle derivate in LaTeX
+
+        // Dati matematici estratti numericamente
+        let mathData = {
+            domainExclusions: [],
+            zeros: [],
+            yIntercept: null,
+            asymptotesV: [],
+            asymptotesH: null,
+            asymptotesOb: null,
+            extrema: [],
+            inflections: [],
+            signIntervals: [],     
+            signIntervalsD1: [],   
+            signIntervalsD2: [],   
+            domainLatex: "",
+            undefinedIntervals: [] // Intervalli continui dove la fx non esiste
+        };
+
+        // Registro delle etichette esatte già calcolate.
+        // Le tabelle dei segni riusano queste etichette invece di ricalcolare
+        // una nuova forma simbolica da un valore arrotondato.
+        let valueLabelRegistry = [];
+
+        // Impostazioni Canvas e Grafico
+        const canvas = document.getElementById('mathCanvas');
+        const ctx = canvas.getContext('2d');
+        const xMin = -10, xMax = 10, yMin = -10, yMax = 10;
+        let scaleX, scaleY;
+
+        // Inizializzazione base del canvas
+        function initCanvas() {
+            scaleX = canvas.width / (xMax - xMin);
+            scaleY = canvas.height / (yMax - yMin);
+            drawAxes();
+        }
+
+        function mapX(x) { return (x - xMin) * scaleX; }
+        function mapY(y) { return canvas.height - (y - yMin) * scaleY; }
+
+        function drawAxes() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Griglia
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            for(let i = Math.ceil(xMin); i <= Math.floor(xMax); i++) {
+                ctx.beginPath(); ctx.moveTo(mapX(i), 0); ctx.lineTo(mapX(i), canvas.height); ctx.stroke();
+            }
+            for(let i = Math.ceil(yMin); i <= Math.floor(yMax); i++) {
+                ctx.beginPath(); ctx.moveTo(0, mapY(i)); ctx.lineTo(canvas.width, mapY(i)); ctx.stroke();
+            }
+
+            // Assi
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            // Asse Y
+            ctx.beginPath(); ctx.moveTo(mapX(0), 0); ctx.lineTo(mapX(0), canvas.height); ctx.stroke();
+            // Asse X
+            ctx.beginPath(); ctx.moveTo(0, mapY(0)); ctx.lineTo(canvas.width, mapY(0)); ctx.stroke();
+
+            // Numeri origine
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px Arial';
+            ctx.fillText('0', mapX(0) + 5, mapY(0) + 15);
+        }
+
+        // --- MOTORE MATEMATICO (Approccio Numerico/Euristico) ---
+        function analyzeFunction() {
+            funcStr = document.getElementById('func-input').value;
+            
+            try {
+                // Parsing e calcolo simbolico derivate
+                const node = math.parse(funcStr);
+                fTex = node.toTex();
+                f = node.compile();
+                
+                const d1Node = math.derivative(node, 'x');
+                f1Tex = d1Node.toTex();
+                f1 = d1Node.compile();
+
+                const d2Node = math.derivative(d1Node, 'x');
+                f2Tex = d2Node.toTex();
+                f2 = d2Node.compile();
+
+            } catch (e) {
+                alert("Errore nella funzione. Controlla la sintassi. Es: (x^2)/(x-1)");
+                return false;
+            }
+
+            // Reset dati
+            mathData = { domainExclusions: [], zeros: [], yIntercept: null, asymptotesV: [], asymptotesH: null, asymptotesOb: null, extrema: [], inflections: [], signIntervals: [], signIntervalsD1: [], signIntervalsD2: [], domainLatex: "", undefinedIntervals: [] };
+            valueLabelRegistry = [];
+
+            // 1. Calcolo intervalli di validità grossolani
+            let validIntervals = [];
+            let currInt = null;
+            let stepDom = 0.05;
+            for (let x = xMin; x <= xMax + stepDom; x += stepDom) {
+                let xr = parseFloat(x.toFixed(3));
+                let y = evaluateSafe(f, xr);
+                // Il dominio deve dipendere solo dall'esistenza del valore reale finito.
+                // Prima venivano esclusi i punti in cui il grafico cresceva molto rapidamente:
+                // questo trasformava erroneamente polinomi come x^4-2x^2-1 in funzioni
+                // definite solo dentro una finestra limitata (circa -6.3, 6.35).
+                let isDef = isFiniteReal(y);
+
+                if (isDef) {
+                    if (!currInt) currInt = {start: xr, end: xr};
+                    else currInt.end = xr;
+                } else {
+                    if (currInt) {
+                        validIntervals.push(currInt);
+                        currInt = null;
+                    }
+                }
+            }
+            if (currInt) validIntervals.push(currInt);
+
+            // Bisezione per trovare esattamente il bordo dell'intervallo
+            function findDomainBoundary(validX, invalidX) {
+                let a = validX;
+                let b = invalidX;
+                for(let i=0; i<10; i++) {
+                    let m = (a + b) / 2;
+                    let y = evaluateSafe(f, m);
+                    if (isFiniteReal(y)) {
+                        a = m;
+                    } else {
+                        b = m;
+                    }
+                }
+                return parseFloat(((a + b) / 2).toFixed(2));
+            }
+
+            // 2. Definizione esatta dei Gaps (zone non definite)
+            let gaps = [];
+            if (validIntervals.length === 0) {
+                gaps.push({start: xMin, end: xMax});
+            } else {
+                if (validIntervals[0].start > xMin + 0.1) {
+                    let b = findDomainBoundary(validIntervals[0].start, xMin);
+                    gaps.push({start: xMin, end: b});
+                }
+                for (let i = 0; i < validIntervals.length - 1; i++) {
+                    let startGap = findDomainBoundary(validIntervals[i].end, validIntervals[i].end + stepDom);
+                    let endGap = findDomainBoundary(validIntervals[i+1].start, validIntervals[i+1].start - stepDom);
+                    gaps.push({start: startGap, end: endGap});
+                }
+                if (validIntervals[validIntervals.length - 1].end < xMax - 0.1) {
+                    let b = findDomainBoundary(validIntervals[validIntervals.length - 1].end, validIntervals[validIntervals.length - 1].end + stepDom);
+                    gaps.push({start: b, end: xMax});
+                }
+            }
+
+            // 3. Calcolo dominio formale in LaTeX (unione di validIntervals)
+            let refinedValidIntervals = [];
+            let currStart = xMin;
+            for (let gap of gaps) {
+                if (gap.start > currStart + 0.05) {
+                    refinedValidIntervals.push({start: currStart, end: gap.start});
+                }
+                currStart = gap.end;
+            }
+            if (currStart < xMax - 0.05) {
+                refinedValidIntervals.push({start: currStart, end: xMax});
+            }
+
+            let domainStrs = [];
+            let domainBoundaries = []; // Tutti gli "spigoli" del dominio
+            for (let v of refinedValidIntervals) {
+                let s = v.start;
+                let e = v.end;
+                
+                if (s > xMin + 0.1) domainBoundaries.push(s);
+                if (e < xMax - 0.1) domainBoundaries.push(e);
+
+                let sStr = (s <= xMin + 0.1) ? "-\\infty" : formatValueLatex(s);
+                let eStr = (e >= xMax - 0.1) ? "+\\infty" : formatValueLatex(e);
+                domainStrs.push(`(${sStr}; ${eStr})`);
+            }
+            mathData.domainLatex = domainStrs.length > 0 ? domainStrs.join(" \\cup ") : "\\emptyset";
+
+            // 4. Asintoti Verticali ed Esclusioni puntuali
+            // checkAsymptote controlla se avvicinandosi al limite il valore "esplode"
+            function checkAsymptote(bound, sign) {
+                let y2 = evaluateSafe(f, bound + sign * 0.01);
+                let y3 = evaluateSafe(f, bound + sign * 0.001);
+                // Se avvicinandoci il valore assoluto cresce del 10% (tipico degli asintoti e diverso da limiti finiti)
+                if (isFinite(y2) && isFinite(y3) && Math.abs(y3) > Math.abs(y2) * 1.1) return true;
+                if (Math.abs(y3) > 20) return true;
+                return false;
+            }
+
+            for (let gap of gaps) {
+                let width = gap.end - gap.start;
+                if (width < 0.2) { 
+                    // BUCO ISOLATO (es. Denominatore = 0)
+                    let p = parseFloat(((gap.start + gap.end) / 2).toFixed(1));
+                    mathData.domainExclusions.push(p);
+                    if (!domainBoundaries.includes(p)) domainBoundaries.push(p);
+                    // Controllo asintoti da ambo i lati
+                    if (checkAsymptote(p, -1) || checkAsymptote(p, 1)) {
+                        if (!mathData.asymptotesV.includes(p)) mathData.asymptotesV.push(p);
+                    }
+                } else {
+                    // INTERVALLO NON DEFINITO AMPIO (es. arg logaritmo negativo)
+                    mathData.undefinedIntervals.push(gap);
+                    let leftBound = parseFloat(gap.start.toFixed(2));
+                    let rightBound = parseFloat(gap.end.toFixed(2));
+                    
+                    // Controllo asintoti solo al margine accessibile
+                    if (leftBound > xMin + 0.1 && checkAsymptote(leftBound, -1)) {
+                        if (!mathData.asymptotesV.includes(leftBound)) mathData.asymptotesV.push(leftBound);
+                    }
+                    if (rightBound < xMax - 0.1 && checkAsymptote(rightBound, 1)) {
+                        if (!mathData.asymptotesV.includes(rightBound)) mathData.asymptotesV.push(rightBound);
+                    }
+                }
+            }
+
+            // 5. Ricerca Zeri (Intersezioni X)
+            // Uso la stessa routine robusta impiegata per f' e f'', così vengono trovate
+            // anche radici tangenti come (x-1)^2, che non cambiano segno.
+            mathData.zeros = findRootsNumeric(f);
+            rememberValueLabels(mathData.zeros);
+
+            // Intersezione Y
+            let yInt = evaluateSafe(f, 0);
+            if (!isNaN(yInt) && isFinite(yInt)) mathData.yIntercept = yInt;
+            else mathData.yIntercept = null;
+
+            // 6. Asintoti Orizzontali/Obliqui
+            // Non basta confrontare f(+10000) e f(-10000): per funzioni pari non limitate
+            // come x^4 - 2x^2 - 1 i due valori sono quasi uguali, ma vanno a +infinito.
+            // Controlliamo quindi la stabilizzazione del valore all'aumentare di |x|.
+            function estimateHorizontal(sign) {
+                let X1 = sign * 5000;
+                let X2 = sign * 10000;
+                let X3 = sign * 20000;
+                let Y1 = evaluateSafe(f, X1);
+                let Y2 = evaluateSafe(f, X2);
+                let Y3 = evaluateSafe(f, X3);
+                if (!isFiniteReal(Y1) || !isFiniteReal(Y2) || !isFiniteReal(Y3)) return null;
+
+                // Limite finito: i valori successivi devono avvicinarsi e la pendenza media
+                // deve tendere a 0. Questo elimina polinomi e funzioni illimitate.
+                let d12 = Math.abs(Y2 - Y1);
+                let d23 = Math.abs(Y3 - Y2);
+                let slope23 = d23 / Math.abs(X3 - X2);
+
+                if (d23 < 0.05 && d23 <= d12 * 1.1 && slope23 < 1e-5) {
+                    return Y3;
+                }
+                return null;
+            }
+
+            let hPlus = estimateHorizontal(1);
+            let hMinus = estimateHorizontal(-1);
+
+            if (hPlus !== null && hMinus !== null && Math.abs(hPlus - hMinus) < 0.1) {
+                mathData.asymptotesH = parseFloat(((hPlus + hMinus) / 2).toFixed(2));
+            } else {
+                // Stima numerica dell'asintoto obliquo. Lo accettiamo solo se il residuo
+                // f(x) - (mx+q) si stabilizza realmente vicino a 0 quando |x| cresce.
+                function estimateOblique(sign) {
+                    let X1 = sign * 5000;
+                    let X2 = sign * 10000;
+                    let X3 = sign * 20000;
+                    let Y1 = evaluateSafe(f, X1);
+                    let Y2 = evaluateSafe(f, X2);
+                    let Y3 = evaluateSafe(f, X3);
+                    if (!isFiniteReal(Y1) || !isFiniteReal(Y2) || !isFiniteReal(Y3)) return null;
+                    let m = (Y2 - Y1) / (X2 - X1);
+                    let q = Y2 - m * X2;
+                    let err3 = Math.abs(Y3 - (m * X3 + q));
+                    let err2 = Math.abs(Y2 - (m * X2 + q));
+
+                    if (isFiniteReal(m) && isFiniteReal(q) && Math.abs(m) > 1e-4 && err3 < 0.2 && err3 <= err2 + 0.2) {
+                        return { m, q };
+                    }
+                    return null;
+                }
+
+                let obPlus = estimateOblique(1);
+                let obMinus = estimateOblique(-1);
+                if (obPlus && obMinus && Math.abs(obPlus.m - obMinus.m) < 0.02 && Math.abs(obPlus.q - obMinus.q) < 0.2) {
+                    mathData.asymptotesOb = { m: parseFloat(obPlus.m.toFixed(2)), q: parseFloat(obPlus.q.toFixed(2)) };
+                }
+            }
+
+            // 7. Punti Critici e Segni
+            // Memorizziamo prima le etichette esatte dei punti critici: le tabelle useranno queste,
+            // senza ricalcolare una nuova forma esatta dal valore arrotondato.
+            rememberValueLabels(mathData.asymptotesV);
+            rememberValueLabels(domainBoundaries);
+
+            let allCriticalsF = mathData.zeros.concat(mathData.asymptotesV).concat(domainBoundaries);
+            mathData.signIntervals = buildSignTable(f, allCriticalsF);
+            
+            let extremaPoints = findRootsNumeric(f1);
+            rememberValueLabels(extremaPoints);
+            let allCriticalsD1 = extremaPoints.concat(mathData.asymptotesV).concat(domainBoundaries);
+            mathData.signIntervalsD1 = buildSignTable(f1, allCriticalsD1);
+            
+            let inflectionPoints = findRootsNumeric(f2);
+            rememberValueLabels(inflectionPoints);
+            let allCriticalsD2 = inflectionPoints.concat(mathData.asymptotesV).concat(domainBoundaries);
+            mathData.signIntervalsD2 = buildSignTable(f2, allCriticalsD2);
+
+            return true;
+        }
+
+        // Funzioni helper matematiche
+        function evaluateSafe(func, val) {
+            try { 
+                let res = func.evaluate({x: val}); 
+                if(typeof res === 'object') {
+                    // Rifiutiamo numeri complessi 
+                    if (res.im !== undefined) {
+                        if (Math.abs(res.im) > 1e-10) return NaN;
+                        return res.re;
+                    }
+                    return NaN;
+                }
+                return res;
+            } 
+            catch(e) { return NaN; }
+        }
+
+        function isFiniteReal(y) {
+            return !isNaN(y) && isFinite(y);
+        }
+
+        function addUniqueRounded(arr, value, decimals = 6, tolerance = 1e-4) {
+            if (value === null || isNaN(value) || !isFinite(value)) return;
+            let v = parseFloat(value.toFixed(decimals));
+            if (!arr.some(r => Math.abs(r - v) < tolerance)) arr.push(v);
+        }
+
+        function findRootsNumeric(func) {
+            let roots = [];
+            let step = 0.05;
+            let samples = [];
+
+            for (let x = xMin; x <= xMax + 1e-9; x += step) {
+                let xr = parseFloat(x.toFixed(4));
+                let y = evaluateSafe(func, xr);
+                samples.push({ x: xr, y: y });
+            }
+
+            for (let i = 1; i < samples.length; i++) {
+                let a = samples[i - 1];
+                let b = samples[i];
+                if (!isFiniteReal(a.y) || !isFiniteReal(b.y)) continue;
+
+                // Radice intercettata direttamente dal campionamento
+                if (Math.abs(a.y) < 1e-4) addUniqueRounded(roots, a.x);
+                if (Math.abs(b.y) < 1e-4) addUniqueRounded(roots, b.x);
+
+                // Cambio di segno: bisezione classica
+                if (a.y * b.y < 0 && Math.abs(b.y - a.y) < 1e6) {
+                    addUniqueRounded(roots, refineRoot(func, a.x, b.x));
+                }
+            }
+
+            // Secondo passaggio: cerca radici tangenti/even multiplicity,
+            // che non cambiano segno, raffinando minimi locali di |f|.
+            for (let i = 1; i < samples.length - 1; i++) {
+                let ym = samples[i].y;
+                if (!isFiniteReal(ym)) continue;
+                let absPrev = isFiniteReal(samples[i - 1].y) ? Math.abs(samples[i - 1].y) : Infinity;
+                let absCurr = Math.abs(ym);
+                let absNext = isFiniteReal(samples[i + 1].y) ? Math.abs(samples[i + 1].y) : Infinity;
+
+                if (absCurr <= absPrev && absCurr <= absNext) {
+                    let candidate = refineRootByMinimum(func, samples[i - 1].x, samples[i + 1].x);
+                    if (candidate !== null) addUniqueRounded(roots, candidate);
+                }
+            }
+
+            return roots.sort((a,b) => a - b);
+        }
+
+        function refineRoot(func, a, b) {
+            let fa = evaluateSafe(func, a);
+            let fb = evaluateSafe(func, b);
+            if (!isFiniteReal(fa) || !isFiniteReal(fb)) return null;
+            if (Math.abs(fa) < 1e-7) return parseFloat(a.toFixed(6));
+            if (Math.abs(fb) < 1e-7) return parseFloat(b.toFixed(6));
+            if (fa * fb > 0) return null;
+
+            for(let i=0; i<40; i++){
+                let c = (a+b)/2;
+                let yc = evaluateSafe(func, c);
+                if (!isFiniteReal(yc)) return null;
+                if (Math.abs(yc) < 1e-7) return parseFloat(c.toFixed(6));
+                if (fa * yc <= 0) {
+                    b = c;
+                    fb = yc;
+                } else {
+                    a = c;
+                    fa = yc;
+                }
+            }
+            return parseFloat(((a+b)/2).toFixed(6));
+        }
+
+        function refineRootByMinimum(func, a, b) {
+            let left = a;
+            let right = b;
+            for (let i = 0; i < 60; i++) {
+                let m1 = left + (right - left) / 3;
+                let m2 = right - (right - left) / 3;
+                let y1 = evaluateSafe(func, m1);
+                let y2 = evaluateSafe(func, m2);
+                let v1 = isFiniteReal(y1) ? Math.abs(y1) : Infinity;
+                let v2 = isFiniteReal(y2) ? Math.abs(y2) : Infinity;
+                if (v1 < v2) right = m2;
+                else left = m1;
+            }
+            let x0 = (left + right) / 2;
+            let y0 = evaluateSafe(func, x0);
+            return (isFiniteReal(y0) && Math.abs(y0) < 1e-3) ? parseFloat(x0.toFixed(6)) : null;
+        }
+
+
+        // --- FORMATTATORE NUMERICO: forma esatta riconosciuta + decimale ---
+        function decimalLatex(value, digits = 4) {
+            if (!isFinite(value)) return String(value);
+            let s = Number(value).toFixed(digits).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+            return s;
+        }
+
+        function gcdInt(a, b) {
+            a = Math.abs(Math.round(a));
+            b = Math.abs(Math.round(b));
+            while (b) { let t = b; b = a % b; a = t; }
+            return a || 1;
+        }
+
+        function rationalApprox(x, maxDen = 80, tol = 1e-7) {
+            if (!isFinite(x)) return null;
+            let sign = x < 0 ? -1 : 1;
+            x = Math.abs(x);
+            let best = null;
+            for (let d = 1; d <= maxDen; d++) {
+                let n = Math.round(x * d);
+                let err = Math.abs(x - n / d);
+                if (err < tol && (best === null || d < best.d)) {
+                    let g = gcdInt(n, d);
+                    best = { n: sign * (n / g), d: d / g, err };
+                }
+            }
+            return best;
+        }
+
+        function rationalLatex(fr) {
+            if (!fr) return null;
+            if (fr.d === 1) return String(fr.n);
+            if (fr.n < 0) return `-\\frac{${Math.abs(fr.n)}}{${fr.d}}`;
+            return `\\frac{${fr.n}}{${fr.d}}`;
+        }
+
+        function simplifySqrtRationalLatex(fr) {
+            if (!fr || fr.n < 0) return null;
+            if (fr.n === 0) return '0';
+            if (fr.d === 1) {
+                let root = Math.sqrt(fr.n);
+                if (Math.abs(root - Math.round(root)) < 1e-10) return String(Math.round(root));
+                return `\\sqrt{${fr.n}}`;
+            }
+            return `\\sqrt{${rationalLatex(fr)}}`;
+        }
+
+        function detectAPlusBSqrtC(x, maxA = 12, maxB = 12, maxC = 30, tol = 2e-5) {
+            for (let c = 2; c <= maxC; c++) {
+                let sr = Math.sqrt(c);
+                if (Math.abs(sr - Math.round(sr)) < 1e-12) continue;
+                for (let a = -maxA; a <= maxA; a++) {
+                    for (let bn = -maxB; bn <= maxB; bn++) {
+                        if (bn === 0) continue;
+                        for (let bd = 1; bd <= maxB; bd++) {
+                            let b = bn / bd;
+                            if (Math.abs(x - (a + b * sr)) < tol) {
+                                let bAbs = rationalApprox(Math.abs(b), maxB, 1e-12);
+                                let bLatex = bAbs && bAbs.d === 1 && bAbs.n === 1 ? '' : rationalLatex(bAbs);
+                                let radical = bLatex === '' ? `\\sqrt{${c}}` : `${bLatex}\\sqrt{${c}}`;
+                                if (a === 0) return bn < 0 ? `-${radical}` : radical;
+                                return bn < 0 ? `${a} - ${radical}` : `${a} + ${radical}`;
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        function exactLatexFromNumber(value) {
+            if (!isFinite(value)) return null;
+            if (Math.abs(value) < 1e-10) return '0';
+
+            let rat = rationalApprox(value, 80, 1e-7);
+            if (rat) return rationalLatex(rat);
+
+            let sign = value < 0 ? '-' : '';
+            let absVal = Math.abs(value);
+            let sqRat = rationalApprox(absVal * absVal, 80, 1e-6);
+            if (sqRat) {
+                let sqLatex = simplifySqrtRationalLatex(sqRat);
+                if (sqLatex) return sign + sqLatex;
+            }
+
+            let direct = detectAPlusBSqrtC(value);
+            if (direct) return direct;
+
+            let inner = detectAPlusBSqrtC(absVal * absVal, 12, 12, 30, 5e-5);
+            if (inner) return `${sign}\\sqrt{${inner}}`;
+
+            return null;
+        }
+
+        function formatValueLatex(value, digits = 4) {
+            if (!isFinite(value)) return String(value);
+            let exact = exactLatexFromNumber(value);
+            let dec = decimalLatex(value, digits);
+            if (!exact) return `\\approx ${dec}`;
+            if (exact === dec) return `${exact}`;
+            return `${exact} \\approx ${dec}`;
+        }
+
+        function rememberValueLabel(value, labelLatex = null) {
+            if (!isFinite(value)) return;
+            let existing = valueLabelRegistry.find(item => Math.abs(item.value - value) < 1e-5);
+            if (existing) return;
+            valueLabelRegistry.push({
+                value: value,
+                labelLatex: labelLatex || formatValueLatex(value)
+            });
+        }
+
+        function rememberValueLabels(values) {
+            values.filter(v => isFinite(v)).forEach(v => rememberValueLabel(v));
+        }
+
+        function rememberedLabelLatex(value, tolerance = 0.02) {
+            if (!isFinite(value)) return null;
+            let best = null;
+            for (let item of valueLabelRegistry) {
+                let dist = Math.abs(item.value - value);
+                if (dist <= tolerance && (!best || dist < best.dist)) {
+                    best = { dist, labelLatex: item.labelLatex };
+                }
+            }
+            return best ? best.labelLatex : null;
+        }
+
+        function labelLatexForStoredValue(value, digits = 4) {
+            return rememberedLabelLatex(value) || formatValueLatex(value, digits);
+        }
+
+        function formatListLatex(values, digits = 4) {
+            return values.map(v => labelLatexForStoredValue(v, digits)).join(';\\quad ');
+        }
+
+        function buildSignTable(func, criticalXs) {
+            // Rimuove duplicati vicini e ordina
+            let points = [];
+            criticalXs.filter(x => isFinite(x)).sort((a,b) => a - b).forEach(x => addUniqueRounded(points, x, 6, 1e-4));
+            let intervals = [];
+            
+            if(points.length === 0) {
+                let yVal = evaluateSafe(func, 0);
+                let signStr = !isFiniteReal(yVal) ? 'ND' : (Math.abs(yVal) < 1e-7 ? '0' : (yVal > 0 ? '+' : '-'));
+                intervals.push({ label: "∀x", sign: signStr, start: xMin, end: xMax });
+                return intervals;
+            }
+
+            // Intervallo prima del primo punto: campiona nel mezzo della porzione visibile, non a "punto - 1"
+            let val = (xMin + points[0]) / 2;
+            let yVal = evaluateSafe(func, val);
+            intervals.push({ text: `x < ${points[0]}`, sign: !isFiniteReal(yVal) ? 'ND' : (yVal > 0 ? '+' : '-'), start: xMin, end: points[0] });
+
+            for(let i=0; i<points.length; i++) {
+                let py = evaluateSafe(func, points[i]);
+                intervals.push({ isPoint: true, val: points[i], labelLatex: labelLatexForStoredValue(points[i]), sign: (isFiniteReal(py) && Math.abs(py) < 1e-5) ? '0' : 'ND' });
+                
+                if(i < points.length - 1) {
+                    let mid = (points[i] + points[i+1]) / 2;
+                    let yMid = evaluateSafe(func, mid);
+                    intervals.push({ text: `${points[i]} < x < ${points[i+1]}`, sign: !isFiniteReal(yMid) ? 'ND' : (yMid > 0 ? '+' : '-'), start: points[i], end: points[i+1] });
+                }
+            }
+
+            // Intervallo dopo l'ultimo punto: campiona nel mezzo della porzione visibile, non a "punto + 1"
+            val = (points[points.length-1] + xMax) / 2;
+            yVal = evaluateSafe(func, val);
+            intervals.push({ text: `x > ${points[points.length-1]}`, sign: !isFiniteReal(yVal) ? 'ND' : (yVal > 0 ? '+' : '-'), start: points[points.length-1], end: xMax });
+
+            return intervals;
+        }
+
+
+        // --- LOGICA UI E STEP ---
+        function startAnalysis() {
+            if(analyzeFunction()) {
+                currentStep = 0;
+                document.getElementById('steps-log').innerHTML = "";
+                initCanvas();
+                
+                let btn = document.getElementById('btn-next');
+                btn.disabled = false;
+                btn.innerText = "Step 1: Dominio";
+            }
+        }
+
+        function nextStep() {
+            currentStep++;
+            let log = document.getElementById('steps-log');
+            let div = document.createElement('div');
+            div.className = 'step-container active';
+            
+            const latex = (str) => katex.renderToString(str, { throwOnError: false, displayMode: true });
+            const latexInline = (str) => katex.renderToString(str, { throwOnError: false, displayMode: false });
+            
+            switch(currentStep) {
+                case 1: // Dominio
+                    div.innerHTML = `<div class="step-title">1. Dominio</div>
+                                     <p>Cerca valori che annullano il denominatore o argomenti negativi in radici/logaritmi.</p>
+                                     <div class="math-text">${latex("D: x \\in " + mathData.domainLatex)}</div>`;
+                    // Oscura da subito le intere bande non definite
+                    drawUndefinedRegions();
+                    // Disegna i punti isolati singoli 
+                    drawExclusions();
+                    document.getElementById('btn-next').innerText = "Step 2: Simmetrie";
+                    break;
+                case 2: // Simmetrie
+                    let isEven = true;
+                    let isOdd = true;
+                    let testedPoints = 0;
+                    
+                    // Cerchiamo dinamicamente dei punti validi nel dominio per testare le simmetrie
+                    // (evitiamo x fissi come x=2 perché potrebbero essere fuori dominio)
+                    for(let testX = 0.1; testX <= 10; testX += 0.23) {
+                        let yPos = evaluateSafe(f, testX);
+                        let yNeg = evaluateSafe(f, -testX);
+                        
+                        // Il test ha senso solo se la funzione esiste sia in x che in -x
+                        if (!isNaN(yPos) && isFinite(yPos) && !isNaN(yNeg) && isFinite(yNeg)) {
+                            testedPoints++;
+                            if (Math.abs(yPos - yNeg) > 0.01) isEven = false;
+                            if (Math.abs(yPos + yNeg) > 0.01) isOdd = false;
+                        }
+                        
+                        // Dopo 5 punti validi confermati, possiamo fermare il test
+                        if (testedPoints >= 5) break;
+                    }
+
+                    // Se non ci sono punti simmetrici validi nel dominio, la funzione non può essere pari o dispari
+                    if (testedPoints === 0) {
+                        isEven = false;
+                        isOdd = false;
+                    }
+
+                    let simText = isEven ? "Funzione PARI (simmetrica rispetto asse y)" : 
+                                  isOdd ? "Funzione DISPARI (simmetrica rispetto origine)" : "Nessuna simmetria evidente";
+                    
+                    let simLatex = isEven ? "f(-x) = f(x)" : (isOdd ? "f(-x) = -f(x)" : "f(-x) \\neq \\pm f(x)");
+                    
+                    div.innerHTML = `<div class="step-title">2. Simmetrie</div>
+                                     <div class="math-text">${latex(simLatex)}</div>
+                                     <p>&rarr; ${simText}</p>`;
+                    document.getElementById('btn-next').innerText = "Step 3: Intersezioni Assi";
+                    break;
+                case 3: // Zeri
+                    div.innerHTML = `<div class="step-title">3. Intersezioni (Zeri)</div>
+                                     <p>Asse X (${latexInline("f(x)=0")}): ${mathData.zeros.length > 0 ? latexInline(formatListLatex(mathData.zeros)) : 'Nessuna'}</p>
+                                     <p>Asse Y (${latexInline("x=0")}): ${mathData.yIntercept !== null ? latexInline(formatValueLatex(mathData.yIntercept)) : 'Nessuna (x=0 escluso)'}</p>`;
+                    drawZeros();
+                    document.getElementById('btn-next').innerText = "Step 4: Segno della Funzione";
+                    break;
+                case 4: // Segno
+                    div.innerHTML = `<div class="step-title">4. Studio del Segno</div>
+                                     <div class="math-text">${latex("f(x) > 0")}</div>
+                                     <p>Cancello le zone in cui la funzione NON passa.</p>`;
+                    div.appendChild(generateSignTableHTML(mathData.signIntervals, 'f'));
+                    drawSignRegions();
+                    document.getElementById('btn-next').innerText = "Step 5: Limiti e Asintoti";
+                    break;
+                case 5: // Limiti e Asintoti
+                    let asyText = "";
+                    if(mathData.asymptotesV.length > 0) asyText += `<p>Asintoti Verticali: ${latexInline("x = " + formatListLatex(mathData.asymptotesV))}</p>`;
+                    if(mathData.asymptotesH !== null) asyText += `<p>Asintoto Orizzontale: ${latexInline("y = " + formatValueLatex(mathData.asymptotesH))}</p>`;
+                    if(mathData.asymptotesOb !== null) asyText += `<p>Asintoto Obliquo: ${latexInline(`y = ${formatValueLatex(mathData.asymptotesOb.m)}x + ${formatValueLatex(mathData.asymptotesOb.q)}`)}</p>`;
+                    if(asyText==="") asyText = "<p>Nessun asintoto rilevato.</p>";
+                    
+                    div.innerHTML = `<div class="step-title">5. Limiti e Asintoti</div>${asyText}`;
+                    drawAsymptotes();
+                    document.getElementById('btn-next').innerText = "Step 6: Derivata Prima";
+                    break;
+                case 6: // Derivata Prima
+                    div.innerHTML = `<div class="step-title">6. Derivata Prima (Crescenza e Max/Min)</div>
+                                     <div class="math-text">${latex("f'(x) = " + f1Tex)}</div>
+                                     <p>Studio del segno di ${latexInline("f'(x) > 0")}:</p>`;
+                    div.appendChild(generateSignTableHTML(mathData.signIntervalsD1, 'f1'));
+                    drawMonotonicityArrows();
+                    document.getElementById('btn-next').innerText = "Step 7: Derivata Seconda";
+                    break;
+                case 7: // Derivata Seconda
+                    div.innerHTML = `<div class="step-title">7. Derivata Seconda (Concavità e Flessi)</div>
+                                     <div class="math-text">${latex("f''(x) = " + f2Tex)}</div>
+                                     <p>Studio del segno di ${latexInline("f''(x) > 0")} (+ concava verso l'alto, - verso il basso):</p>`;
+                    div.appendChild(generateSignTableHTML(mathData.signIntervalsD2, 'f2'));
+                    document.getElementById('btn-next').innerText = "Step 8: Disegna Grafico Finale";
+                    break;
+                case 8: // Grafico Finale
+                    div.innerHTML = `<div class="step-title">8. Grafico Finale</div>
+                                     <p>Unendo tutti gli indizi, tracciamo il grafico della funzione.</p>`;
+                    drawFinalCurve();
+                    document.getElementById('btn-next').innerText = "Studio Completato";
+                    document.getElementById('btn-next').disabled = true;
+                    break;
+            }
+            
+            log.appendChild(div);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // --- FUNZIONI DI DISEGNO CANVAS (INDIZI) ---
+
+        function drawUndefinedRegions() {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(207, 102, 121, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+
+            mathData.undefinedIntervals.forEach(gap => {
+                ctx.save();
+                ctx.beginPath();
+                let pxStart = mapX(gap.start);
+                let pxEnd = mapX(gap.end);
+                
+                ctx.rect(pxStart, 0, pxEnd - pxStart, canvas.height);
+                ctx.clip(); 
+
+                ctx.beginPath();
+                for(let d = -canvas.height; d < canvas.width + canvas.height; d += 15) {
+                    ctx.moveTo(0, d);
+                    ctx.lineTo(canvas.width, d - canvas.width);
+                }
+                ctx.stroke();
+                ctx.restore();
+            });
+            ctx.restore();
+        }
+
+        function drawArrow(ctx, fromx, fromy, tox, toy, color) {
+            let headlen = 15; 
+            let dx = tox - fromx;
+            let dy = toy - fromy;
+            let angle = Math.atan2(dy, dx);
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.moveTo(fromx, fromy);
+            ctx.lineTo(tox, toy);
+            ctx.lineTo(tox - headlen * Math.cos(angle - Math.PI / 6), toy - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.moveTo(tox, toy);
+            ctx.lineTo(tox - headlen * Math.cos(angle + Math.PI / 6), toy - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.stroke();
+        }
+
+        function drawMonotonicityArrows() {
+            ctx.save();
+            mathData.signIntervalsD1.forEach(int => {
+                if(!int.isPoint && int.start !== undefined && int.end !== undefined && int.sign !== 'ND') {
+                    let sX = Math.max(xMin, int.start);
+                    let eX = Math.min(xMax, int.end);
+                    let mX = (sX + eX) / 2;
+                    
+                    let pxStart = mapX(mX - 1);
+                    let pxEnd = mapX(mX + 1);
+                    
+                    if (pxEnd > pxStart) {
+                        let cy = mapY(0) - 30;
+                        let arrowLengthY = 20;
+                        if(int.sign === '+') {
+                            drawArrow(ctx, pxStart, cy + arrowLengthY, pxEnd, cy - arrowLengthY, '#4caf50'); 
+                        } else {
+                            drawArrow(ctx, pxStart, cy - arrowLengthY, pxEnd, cy + arrowLengthY, '#f44336'); 
+                        }
+                    }
+                }
+            });
+            ctx.restore();
+        }
+
+        function drawExclusions() {
+            ctx.strokeStyle = '#fff';
+            ctx.fillStyle = varColor('--bg-color');
+            ctx.lineWidth = 2;
+            mathData.domainExclusions.forEach(x => {
+                ctx.beginPath();
+                ctx.arc(mapX(x), mapY(0), 5, 0, Math.PI * 2);
+                ctx.fill(); 
+                ctx.stroke();
+            });
+        }
+
+        function drawZeros() {
+            ctx.fillStyle = '#fff';
+            mathData.zeros.forEach(x => {
+                ctx.beginPath();
+                ctx.arc(mapX(x), mapY(0), 5, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            if(mathData.yIntercept !== null) {
+                ctx.beginPath();
+                ctx.arc(mapX(0), mapY(mathData.yIntercept), 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawSignRegions() {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(207, 102, 121, 0.5)'; 
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+
+            let points = mathData.domainExclusions.concat(mathData.zeros).concat(mathData.asymptotesV);
+            mathData.undefinedIntervals.forEach(gap => {
+                points.push(gap.start);
+                points.push(gap.end);
+            });
+            points = [...new Set(points)].sort((a,b) => a - b);
+            
+            let startX = xMin;
+            
+            for(let i=0; i<=points.length; i++) {
+                let endX = i < points.length ? points[i] : xMax;
+                if (endX <= startX + 0.01) { startX = endX; continue; } // Evita loop su intervalli nulli
+                
+                let midX = (startX + endX) / 2;
+                let yVal = evaluateSafe(f, midX);
+                
+                if (isNaN(yVal)) {
+                    startX = endX;
+                    continue; // Banda già cancellata totalmente nello step 1
+                }
+                
+                let sign = yVal > 0;
+                
+                ctx.save();
+                ctx.beginPath();
+                let pxStart = mapX(startX);
+                let pxEnd = mapX(endX);
+                
+                if(sign) {
+                    ctx.rect(pxStart, mapY(0), pxEnd - pxStart, canvas.height - mapY(0));
+                } else {
+                    ctx.rect(pxStart, 0, pxEnd - pxStart, mapY(0));
+                }
+                
+                ctx.clip(); 
+
+                ctx.beginPath();
+                for(let d = -canvas.height; d < canvas.width + canvas.height; d += 15) {
+                    ctx.moveTo(0, d);
+                    ctx.lineTo(canvas.width, d - canvas.width);
+                }
+                ctx.stroke();
+                ctx.restore();
+
+                startX = endX;
+            }
+            ctx.restore();
+        }
+
+        function drawAsymptotes() {
+            ctx.strokeStyle = varColor('--secondary'); // Azzurro
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]);
+
+            // Verticali
+            mathData.asymptotesV.forEach(x => {
+                ctx.beginPath();
+                ctx.moveTo(mapX(x), 0);
+                ctx.lineTo(mapX(x), canvas.height);
+                ctx.stroke();
+            });
+
+            // Orizzontali
+            if(mathData.asymptotesH !== null) {
+                ctx.beginPath();
+                ctx.moveTo(0, mapY(mathData.asymptotesH));
+                ctx.lineTo(canvas.width, mapY(mathData.asymptotesH));
+                ctx.stroke();
+            }
+
+            // Obliqui
+            if(mathData.asymptotesOb !== null) {
+                let m = mathData.asymptotesOb.m;
+                let q = mathData.asymptotesOb.q;
+                ctx.beginPath();
+                ctx.moveTo(mapX(xMin), mapY(m*xMin + q));
+                ctx.lineTo(mapX(xMax), mapY(m*xMax + q));
+                ctx.stroke();
+            }
+            ctx.setLineDash([]); // Reset
+        }
+
+        function drawFinalCurve() {
+            ctx.strokeStyle = varColor('--accent'); // Viola
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            let isDrawing = false;
+
+            // Costruiamo un array di punti da plottare.
+            // Usiamo una densità variabile per far "esplodere" la curva verso +/- infinito
+            let plotPoints = [];
+            let baseStep = 0.02;
+            for (let x = xMin; x <= xMax; x += baseStep) {
+                plotPoints.push(x);
+            }
+            
+            // Aggiungiamo punti vicinissimi agli asintoti e ai bordi del dominio
+            let criticals = [...mathData.asymptotesV, ...mathData.domainExclusions];
+            mathData.undefinedIntervals.forEach(gap => { criticals.push(gap.start); criticals.push(gap.end); });
+            criticals = [...new Set(criticals)];
+
+            for (let c of criticals) {
+                if (c >= xMin && c <= xMax) {
+                    // Precisione estrema (fino a 10^-10) per i tratti verticali
+                    plotPoints.push(
+                        c - 0.05, c - 0.01, c - 0.005, c - 0.001, c - 0.0001,
+                        c - 1e-5, c - 1e-7, c - 1e-10
+                    );
+                    plotPoints.push(
+                        c + 1e-10, c + 1e-7, c + 1e-5,
+                        c + 0.0001, c + 0.001, c + 0.005, c + 0.01, c + 0.05
+                    );
+                }
+            }
+            
+            // Ordiniamo l'array
+            plotPoints.sort((a, b) => a - b);
+            
+            let prevX = null;
+            let prevY = null;
+
+            for (let i = 0; i < plotPoints.length; i++) {
+                let x = plotPoints[i];
+                // Evita calcoli inutili su punti coincidenti
+                if (i > 0 && Math.abs(x - plotPoints[i-1]) < 1e-12) continue;
+
+                let y = evaluateSafe(f, x);
+                
+                // Limite molto ampio (es. y=2000) per garantire che il tratto vada totalmente fuori schermo
+                if(isNaN(y) || !isFinite(y) || Math.abs(y) > 2000) {
+                    isDrawing = false;
+                    prevX = x;
+                    prevY = y;
+                    continue;
+                }
+
+                let crossedAsymptote = false;
+                if (prevX !== null) {
+                     for (let asy of mathData.asymptotesV) {
+                         if ((prevX <= asy && x >= asy) || (prevX >= asy && x <= asy)) {
+                             crossedAsymptote = true;
+                             break;
+                         }
+                     }
+                     for (let gap of mathData.undefinedIntervals) {
+                         // Tagliamo la curva se salta attraverso una zona "rossa" non definita
+                         if ((prevX <= gap.start && x >= gap.start) || (prevX <= gap.end && x >= gap.end)) {
+                             crossedAsymptote = true;
+                             break;
+                         }
+                     }
+                }
+
+                // Ferma il tratto in caso di salti enormi di segno anomali
+                let isHugeJump = prevX !== null && prevY !== null && isFinite(prevY) && Math.abs(y - prevY) > 50 && (y * prevY < 0);
+
+                if(crossedAsymptote || isHugeJump) {
+                    isDrawing = false;
+                }
+
+                let px = mapX(x);
+                let py = mapY(y);
+
+                if(!isDrawing) {
+                    ctx.moveTo(px, py);
+                    isDrawing = true;
+                } else {
+                    ctx.lineTo(px, py);
+                }
+                
+                prevX = x;
+                prevY = y;
+            }
+            ctx.stroke();
+            drawExclusions();
+        }
+
+        // Utility per leggere i colori CSS root
+        function varColor(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+
+        // --- GENERATORE TABELLA DEI SEGNI HTML (Stile classico orizzontale) ---
+        function generateSignTableHTML(intervals, type = 'f') {
+            let container = document.createElement('div');
+            container.className = 'sign-table';
+            
+            if(intervals.length === 0) return container;
+
+            let columns = intervals.length;
+            let grid = document.createElement('div');
+            grid.className = 'sign-grid';
+            grid.style.gridTemplateColumns = `repeat(${columns}, minmax(40px, 1fr))`;
+
+            let rowAxis = document.createElement('div');
+            rowAxis.className = 'sg-row sg-axis-row';
+            intervals.forEach(int => {
+                let cell = document.createElement('div');
+                cell.className = 'sg-cell' + (int.isPoint ? ' sg-val-col' : '');
+                cell.innerHTML = int.isPoint ? katex.renderToString(int.labelLatex || labelLatexForStoredValue(int.val), { throwOnError: false, displayMode: false }) : '';
+                rowAxis.appendChild(cell);
+            });
+            grid.appendChild(rowAxis);
+
+            let rowSigns = document.createElement('div');
+            rowSigns.className = 'sg-row';
+            intervals.forEach(int => {
+                let cell = document.createElement('div');
+                cell.className = 'sg-cell' + (int.isPoint ? ' sg-val-col' : '');
+                
+                if(!int.isPoint) {
+                    let signSpan = document.createElement('span');
+                    
+                    if (int.sign === 'ND') {
+                        signSpan.innerText = '∄'; 
+                        signSpan.style.color = '#f44336';
+                        signSpan.style.fontSize = '1.5rem';
+                    } else {
+                        signSpan.className = 'final-sign';
+                        signSpan.innerText = int.sign;
+                    }
+                    cell.appendChild(signSpan);
+
+                    if (int.sign !== 'ND') {
+                        if (type === 'f1') {
+                            let arrow = document.createElement('div');
+                            arrow.innerHTML = int.sign === '+' ? '&#8599;' : '&#8600;'; 
+                            arrow.style.color = int.sign === '+' ? '#4caf50' : '#f44336';
+                            arrow.style.fontSize = '1.8rem';
+                            arrow.style.marginTop = '8px';
+                            arrow.style.fontWeight = 'bold';
+                            cell.appendChild(arrow);
+                        } else if (type === 'f2') {
+                            let concavity = document.createElement('div');
+                            concavity.innerHTML = int.sign === '+' ? '&#8746;' : '&#8745;'; 
+                            concavity.style.color = '#bb86fc';
+                            concavity.style.fontSize = '1.8rem';
+                            concavity.style.marginTop = '8px';
+                            cell.appendChild(concavity);
+                        }
+                    }
+                } else {
+                    cell.innerText = int.sign === 'ND' ? '∄' : '0';
+                    cell.style.color = '#888';
+                }
+                
+                rowSigns.appendChild(cell);
+            });
+            grid.appendChild(rowSigns);
+
+            container.appendChild(grid);
+            return container;
+        }
+
+        // Init all'avvio
+        initCanvas();
+    </script>
+</body>
+</html>
